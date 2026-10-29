@@ -41,3 +41,5 @@ nav a,nav button,#home{padding:11px 19px;border-radius:0;font:13px var(--serif);
 @media(max-width:700px){#themes{top:94px;right:20px;padding:20px;max-height:calc(100dvh - 120px)}.theme-card{min-height:68px;padding-top:9px;padding-bottom:9px}.theme-card strong{font-size:13px}.theme-card small{font-size:9px}nav{gap:5px}nav a,nav button{padding:9px 8px}.brand{gap:10px}.brand-name{font-size:20px}.brand-roman{font-size:6px}[data-theme=japanese] #room-title p{font-size:28px;letter-spacing:.25em}[data-theme=japanese] #room-title{top:125px}.theme-swatch{width:43px;height:43px}}
 [data-theme=louvre] #room-title{background:#fff4e2e8;border-left-color:#9a793c;padding:14px 22px;box-shadow:0 4px 24px #4e361412}
 @media(max-width:700px){[data-theme=louvre] #room-title{padding:12px 16px}}
+
+#footsteps-toggle{margin-top:16px;padding:9px 13px;background:transparent;color:var(--ink);border:1px solid var(--line);font:12px var(--serif);letter-spacing:.08em}

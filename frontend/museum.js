@@ -1,12 +1,16 @@
 import * as THREE from 'three';
 import { buildArchitecture, decorateFrame } from './architecture.js';
 import { themes, themeStorageKey, validTheme, loadTheme } from './themes.js';
+import { TatamiFootsteps } from './footsteps.js';
 
 const $ = id => document.getElementById(id);
 const stage = $('scene');
 const clamp = THREE.MathUtils.clamp;
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const keys = new Set();
+const footsteps = new TatamiFootsteps();
+let footstepsMuted = false;
+try { footstepsMuted = localStorage.getItem('hakubutsukan.footstepsMuted') === 'true'; } catch {}
 let renderer, scene, camera, gallery, raycaster, hemisphere, ambient;
 let theme;
 try { theme = loadTheme(localStorage); } catch { theme = 'classic'; }
@@ -161,6 +165,7 @@ function resize() { if (!renderer) return; camera.aspect=innerWidth/innerHeight;
 function animate(time) {
   const dt = Math.min((time-lastTime)/1000 || 0,.05); lastTime=time;
   if (!active) return;
+  const previousX = eye.x, previousZ = eye.z;
   let forward=(keys.has('KeyW')||keys.has('ArrowUp')||touchMove==='forward'?1:0)-(keys.has('KeyS')||keys.has('ArrowDown')||touchMove==='back'?1:0);
   let strafe=(keys.has('KeyD')?1:0)-(keys.has('KeyA')?1:0);
   const turn=(keys.has('ArrowLeft')||touchMove==='left'?1:0)-(keys.has('ArrowRight')||touchMove==='right'?1:0);
@@ -172,6 +177,7 @@ function animate(time) {
     const delta=Math.atan2(Math.sin(walking.yaw-yaw),Math.cos(walking.yaw-yaw)); yaw+=delta*alpha; pitch+=(walking.pitch-pitch)*alpha;
     if (eye.distanceTo(walking.position)<.025 && Math.abs(delta)<.005) walking=null;
   }
+  footsteps.advance(Math.min(Math.hypot(eye.x - previousX, eye.z - previousZ), dt * 2.7));
   camera.position.copy(eye); camera.rotation.set(pitch,yaw,0,'YXZ');
   if (++drawCount%2===0) {
     labels.forEach((label,i) => { const item=items[i]; projected.copy(item.anchor).project(camera); const visible=$('exhibit').hidden && projected.z<1 && projected.z>-1 && Math.abs(projected.x)<1.1 && Math.abs(projected.y)<1.1 && eye.distanceTo(item.anchor)<18; label.hidden=!visible; if(visible) label.style.transform=`translate(${(projected.x*.5+.5)*innerWidth}px,${(-projected.y*.5+.5)*innerHeight}px) translate(-50%,-50%)`; });
@@ -202,14 +208,14 @@ function start() {
     camera=new THREE.PerspectiveCamera(62,innerWidth/innerHeight,.1,90); raycaster=new THREE.Raycaster();
     hemisphere=new THREE.HemisphereLight();ambient=new THREE.AmbientLight();scene.add(hemisphere,ambient);applyThemeLighting();
     buildRoom(); resize(); renderer.setAnimationLoop(animate);
-    renderer.domElement.addEventListener('webglcontextlost',event=>{event.preventDefault();$('message').textContent='描画が中断しました。再読み込みするか一覧を開いてください。';});
+    renderer.domElement.addEventListener('webglcontextlost',event=>{event.preventDefault();footsteps.setEnabled(false);$('message').textContent='描画が中断しました。再読み込みするか一覧を開いてください。';});
   } catch { $('message').textContent='この端末では館内を描画できません。右上の一覧を開いてください。'; return; }
   stage.addEventListener('pointerdown',event=>{if(event.button!==0)return; dragging={x:event.clientX,y:event.clientY,lastX:event.clientX,lastY:event.clientY,moved:false};stage.setPointerCapture(event.pointerId);stage.focus({preventScroll:true});});
   stage.addEventListener('pointermove',event=>{if(dragging){const dx=event.clientX-dragging.lastX,dy=event.clientY-dragging.lastY; if(Math.hypot(event.clientX-dragging.x,event.clientY-dragging.y)>5)dragging.moved=true; if(dragging.moved){$('room-title').hidden=true;walking=null;yaw-=dx*.004;pitch=clamp(pitch-dy*.003,-.55,.45);}dragging.lastX=event.clientX;dragging.lastY=event.clientY;}else if(event.pointerType==='mouse'){pointAt(event);stage.style.cursor=raycaster.intersectObjects(artwork).length?'pointer':'grab';}});
   stage.addEventListener('pointerup',event=>{if(dragging&&!dragging.moved)clickScene(event);dragging=null;});stage.addEventListener('pointercancel',()=>{dragging=null;});
   addEventListener('keydown',event=>{if(event.code==='Escape'){if(!$('themes').hidden){setThemes(false);$('theme-toggle').focus();return;}setMap(false);closeExhibit();walking=null;return;}if(['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName))return;if(['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(event.code)){event.preventDefault();keys.add(event.code);}});
-  addEventListener('keyup',event=>keys.delete(event.code));addEventListener('blur',()=>{keys.clear();touchMove='';dragging=null;});
-  document.addEventListener('visibilitychange',()=>{active=!document.hidden;keys.clear();touchMove='';lastTime=0;});addEventListener('resize',resize);
+  addEventListener('keyup',event=>keys.delete(event.code));addEventListener('blur',()=>{keys.clear();touchMove='';dragging=null;footsteps.setEnabled(false);});
+  document.addEventListener('visibilitychange',()=>{active=!document.hidden;keys.clear();touchMove='';lastTime=0;updateFootsteps();});addEventListener('resize',resize);
   $('next').onclick=()=>visit(current+1);$('previous').onclick=()=>visit(current<0?items.length-1:current-1);$('home').onclick=returnHome;$('exhibit-close').onclick=closeExhibit;$('map-toggle').onclick=()=>setMap($('map').hidden);$('map-close').onclick=()=>{setMap(false);$('map-toggle').focus();};
   for(const button of document.querySelectorAll('[data-move]')){button.addEventListener('pointerdown',event=>{event.preventDefault();touchMove=button.dataset.move;button.setPointerCapture(event.pointerId);});for(const name of ['pointerup','pointercancel','lostpointercapture'])button.addEventListener(name,()=>touchMove='');}
   refresh();setInterval(refresh,15000);
@@ -217,7 +223,7 @@ function start() {
 function setThemes(open) {
   $('themes').hidden = !open;
   $('theme-toggle').setAttribute('aria-expanded', String(open));
-  if (open) { setMap(false); keys.clear(); touchMove = ''; walking = null; dragging = null; }
+  if (open) { setMap(false); keys.clear(); touchMove = ''; walking = null; dragging = null; footsteps.stop(); }
 }
 function applyThemeLighting() {
   const config = themes[theme];
@@ -225,8 +231,15 @@ function applyThemeLighting() {
   hemisphere.color.set(config.sky); hemisphere.groundColor.set(config.ground); hemisphere.intensity = config.hemisphere;
   ambient.color.set(config.ambient); ambient.intensity = .5; renderer.toneMappingExposure = config.exposure;
 }
+function updateFootsteps() {
+  footsteps.setEnabled(theme === 'japanese' && !footstepsMuted && !document.hidden && document.hasFocus());
+  $('footsteps-toggle').hidden = theme !== 'japanese';
+  $('footsteps-toggle').setAttribute('aria-pressed', String(!footstepsMuted));
+  $('footsteps-toggle').textContent = `畳の足音：${footstepsMuted ? '切' : '入'}`;
+}
 function applyThemeCopy() {
   const config = themes[theme]; document.documentElement.dataset.theme = theme;
+  updateFootsteps();
   $('room-title').querySelector('.room-eyebrow').textContent = config.eyebrow;
   $('room-title').querySelector('p').textContent = config.title;
   $('room-title').querySelector('.room-caption').textContent = config.caption;
@@ -245,7 +258,7 @@ $('theme-options').addEventListener('change', event => {
   const next = validTheme(event.target.value); if (next === theme) return;
   theme = next;
   try { localStorage.setItem(themeStorageKey, theme); } catch { /* Keep the session usable when storage is unavailable. */ }
-  applyThemeCopy();
+  applyThemeCopy(); footsteps.unlock();
   if (gallery) {
     keys.clear(); touchMove = ''; walking = null; dragging = null;
     applyThemeLighting(); buildRoom();
@@ -253,5 +266,15 @@ $('theme-options').addEventListener('change', event => {
   }
   $('theme-feedback').textContent = `${themes[theme].name}に切り替えました`;
 });
+$('footsteps-toggle').onclick = () => {
+  footstepsMuted = !footstepsMuted;
+  try { localStorage.setItem('hakubutsukan.footstepsMuted', String(footstepsMuted)); } catch {}
+  updateFootsteps(); footsteps.unlock();
+};
+// Capturing gestures covers WASD, touch controls, floor clicks and guided walks.
+document.addEventListener('pointerdown', () => footsteps.unlock(), { capture: true });
+document.addEventListener('keydown', event => { if (!event.repeat) footsteps.unlock(); }, { capture: true });
+addEventListener('focus', updateFootsteps);
+addEventListener('pagehide', () => footsteps.setEnabled(false));
 applyThemeCopy();
 start();
