@@ -1,0 +1,14 @@
+# docker compose -f compose.yaml -f compose.caddy.yaml up -d --build
+services:
+  hakubutsukan:
+    labels:
+      caddy: ${HAKUBUTSUKAN_DOMAIN:?Set HAKUBUTSUKAN_DOMAIN in .env}
+      caddy.reverse_proxy: "{{upstreams 8080}}"
+      caddy_ingress_network: ${CADDY_NETWORK:-caddy}
+    networks:
+      - caddy
+
+networks:
+  caddy:
+    external: true
+    name: ${CADDY_NETWORK:-caddy}

@@ -1,0 +1,57 @@
+name: hakubutsukan
+
+services:
+  hakubutsukan:
+    build: .
+    image: hakubutsukan:local
+    restart: unless-stopped
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${PORT:-8090}:8080"
+    environment:
+      COLLECTOR_URL: http://collector:8080
+      DOCKGE_URL: ${DOCKGE_URL:-}
+      REFRESH_INTERVAL: ${REFRESH_INTERVAL:-15s}
+    depends_on:
+      collector:
+        condition: service_healthy
+    networks:
+      - frontend
+      - collection
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: [CMD, /hakubutsukan, healthcheck]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+  collector:
+    build: .
+    image: hakubutsukan:local
+    command: [collector]
+    restart: unless-stopped
+    environment:
+      REFRESH_INTERVAL: ${REFRESH_INTERVAL:-15s}
+    # Set DOCKER_GID to the numeric group owning the host's Docker socket.
+    group_add:
+      - "${DOCKER_GID:-0}"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - collection
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: [CMD, /hakubutsukan, healthcheck]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+networks:
+  frontend:
+  collection:
+    internal: true

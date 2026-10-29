@@ -1,0 +1,10 @@
+{
+  "name": "hakubutsukan",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "esbuild frontend/museum.js --bundle --minify --format=esm --outfile=web/museum.bundle.js --legal-comments=eof"
+  },
+  "dependencies": { "three": "0.186.1" },
+  "devDependencies": { "esbuild": "0.28.2" }
+}

@@ -1,0 +1,19 @@
+# No Docker socket or external services are used in demo mode.
+# docker compose -f compose.demo.yaml up -d --build
+name: hakubutsukan-demo
+services:
+  hakubutsukan:
+    build: .
+    image: hakubutsukan:local
+    environment:
+      DEMO_MODE: "true"
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${PORT:-8090}:8080"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: [CMD, /hakubutsukan, healthcheck]
+      interval: 15s
+      timeout: 3s
+      retries: 3
