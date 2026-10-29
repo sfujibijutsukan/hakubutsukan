@@ -6,7 +6,7 @@
   --muted: #75796e;
   --line: #dcded2;
   --green: #305c48;
-  --serif: "Yu Mincho", "Hiragino Mincho ProN", Georgia, serif;
+  --serif: "Hiragino Mincho ProN", "Yu Mincho", "YuMincho", "Noto Serif CJK JP", Baskerville, serif;
   --sans: "Yu Gothic UI", "Hiragino Kaku Gothic ProN", system-ui, sans-serif;
 }
 
@@ -122,3 +122,8 @@ h1 span { font: 17px Georgia, serif; color: #8a937e; letter-spacing: 0; margin-l
   * { transition: none !important; }
   .card:hover { transform: none; }
 }
+
+/* Classical typography shared with the gallery. */
+.brand{gap:16px}.brand-copy{display:flex;flex-direction:column;gap:7px}.brand-name{font:500 28px/1 var(--serif);letter-spacing:.4em;margin-right:-.4em}.brand-roman{font:10px/1 Baskerville,"Palatino Linotype",serif;letter-spacing:.25em;color:#866b3e}.seal{width:46px;height:53px;border-color:#9e824c;outline:1px solid #9e824c55;outline-offset:4px;font-size:32px;color:#7e6536}
+h1{font-size:36px;letter-spacing:.18em}.card h2{font-size:23px;letter-spacing:.12em}.description{font-family:var(--serif);font-size:13px}.filters,.admin,.open-link{font-family:var(--serif);letter-spacing:.08em}.card{border-radius:0}.card-top{position:relative}.grid{align-items:start}.card-preview{inset:0}
+@media(max-width:640px){.brand{gap:12px}.brand-name{font-size:23px}.brand-roman{font-size:8px}.seal{width:34px;height:42px;font-size:26px}h1{font-size:29px}}
