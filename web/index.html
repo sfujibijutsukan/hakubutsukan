@@ -12,10 +12,23 @@
   <div id="scene" role="application" aria-label="博物館の展示室。WASDで移動、矢印キーで旋回、ドラッグで見回せます。" tabindex="0"></div>
   <div id="labels"></div>
   <header>
-    <a class="brand" href="/" aria-label="博物館の入口"><span class="seal" aria-hidden="true">博</span><span>hakubutsukan</span></a>
-    <nav><span id="demo" hidden>デモ</span><button id="map-toggle" aria-expanded="false" aria-controls="map">館内図</button><a href="/list.html">一覧 ↗</a></nav>
+    <a class="brand" href="/" aria-label="博物館の入口"><span class="seal" aria-hidden="true">博</span><span class="brand-copy"><span class="brand-name">博物館</span><span class="brand-roman">HAKUBUTSUKAN</span></span></a>
+    <nav><span id="demo" hidden>デモ</span><button id="theme-toggle" aria-expanded="false" aria-controls="themes">空間</button><button id="map-toggle" aria-expanded="false" aria-controls="map">館内図</button><a href="/list.html">一覧 ↗</a></nav>
   </header>
+  <div id="room-title" aria-hidden="true"><span class="room-eyebrow">THE PERMANENT COLLECTION</span><p>常設展示室</p><span class="room-caption">日々の営みを、蒐集する。</span></div>
   <p id="message" role="status">展示室を開いています</p>
+  <aside id="themes" hidden aria-labelledby="themes-title">
+    <div class="map-heading"><h1 id="themes-title">空間を選ぶ</h1><button id="themes-close" aria-label="空間の選択を閉じる">×</button></div>
+    <p class="themes-intro">同じ展示を、違う世界で。</p>
+    <fieldset id="theme-options"><legend class="sr-only">展示室のテーマ</legend>
+      <label class="theme-card"><input type="radio" name="museum-theme" value="classic"><span class="theme-swatch swatch-classic" aria-hidden="true">Ⅰ</span><span><strong>クラシック</strong><small>深緑と真鍮の、静かな蒐集室</small></span></label>
+      <label class="theme-card"><input type="radio" name="museum-theme" value="louvre"><span class="theme-swatch swatch-louvre" aria-hidden="true">△</span><span><strong>ルーブル風</strong><small>石柱と金彩が連なる、光の宮殿</small></span></label>
+      <label class="theme-card"><input type="radio" name="museum-theme" value="japanese"><span class="theme-swatch swatch-japanese" aria-hidden="true">和</span><span><strong>和</strong><small>畳・障子・行灯。余白を愛でる和の間</small></span></label>
+      <label class="theme-card"><input type="radio" name="museum-theme" value="cyberpunk"><span class="theme-swatch swatch-cyberpunk" aria-hidden="true">⌘</span><span><strong>サイバーパンク</strong><small>ネオンに浮かぶ、未来のアーカイブ</small></span></label>
+    </fieldset>
+    <button id="footsteps-toggle" hidden aria-pressed="true">畳の足音：入</button>
+    <p id="theme-feedback" class="themes-note" role="status">選んだ空間は、このブラウザに保存されます。</p>
+  </aside>
   <aside id="map" hidden aria-label="館内図">
     <div class="map-heading"><h1>館内図</h1><button id="map-close" aria-label="館内図を閉じる">×</button></div>
     <div id="map-room" class="map-room"><span class="entrance">入口</span></div>

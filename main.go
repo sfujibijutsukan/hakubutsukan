@@ -31,6 +31,7 @@ type Exhibit struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	URL         string `json:"url"`
+	Preview     string `json:"preview,omitempty"`
 	Category    string `json:"category"`
 	Icon        string `json:"icon"`
 	State       string `json:"state"`
@@ -71,6 +72,16 @@ func webURL(raw string) string {
 }
 
 var hostname = regexp.MustCompile(`^[a-zA-Z0-9](?:[a-zA-Z0-9.-]*[a-zA-Z0-9])?(?::[0-9]+)?$`)
+
+// Previews are local images, never arbitrary URLs fetched by the server.
+var previewPath = regexp.MustCompile(`^/previews/[a-zA-Z0-9][a-zA-Z0-9_-]*\.(png|jpg|jpeg|webp)$`)
+
+func previewURL(raw string) string {
+	if previewPath.MatchString(raw) {
+		return raw
+	}
+	return ""
+}
 
 func exhibitURL(labels map[string]string) string {
 	if raw, ok := labels["hakubutsukan.url"]; ok {
@@ -129,7 +140,7 @@ func exhibitsFrom(containers []container) []Exhibit {
 			health = "starting"
 		}
 		order, _ := strconv.Atoi(l["hakubutsukan.order"])
-		result = append(result, Exhibit{ID: id, Name: name, Description: l["hakubutsukan.description"], URL: exhibitURL(l), Category: category, Icon: icon, State: c.State, Health: health, Order: order})
+		result = append(result, Exhibit{ID: id, Name: name, Description: l["hakubutsukan.description"], URL: exhibitURL(l), Preview: previewURL(l["hakubutsukan.preview"]), Category: category, Icon: icon, State: c.State, Health: health, Order: order})
 	}
 	sort.Slice(result, func(i, j int) bool {
 		if result[i].Order != result[j].Order {
@@ -261,6 +272,18 @@ func routes(s *store, collector bool) http.Handler {
 	mux.HandleFunc(path, func(w http.ResponseWriter, r *http.Request) { s.RLock(); defer s.RUnlock(); jsonResponse(w, s.catalog) })
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok\n")) })
 	if !collector {
+		previews, _ := fs.Sub(assets, "web/previews")
+		if dir := os.Getenv("PREVIEW_DIR"); dir != "" {
+			previews = os.DirFS(dir)
+		}
+		previewFiles := http.StripPrefix("/previews/", http.FileServer(http.FS(previews)))
+		mux.HandleFunc("GET /previews/", func(w http.ResponseWriter, r *http.Request) {
+			if previewURL(r.URL.Path) == "" {
+				http.NotFound(w, r)
+				return
+			}
+			previewFiles.ServeHTTP(w, r)
+		})
 		root, _ := fs.Sub(assets, "web")
 		files := http.FileServer(http.FS(root))
 		mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
@@ -351,7 +374,7 @@ func demoExhibits() []Exhibit {
 	return []Exhibit{
 		{ID: "demo/animekan", Name: "アニメ館", Category: "エンタメ", Icon: "映", State: "running", Health: "none", Order: 10},
 		{ID: "demo/hanafudakan", Name: "花札館", URL: webURL(os.Getenv("DEMO_HANAFUDAKAN_URL")), Category: "ゲーム", Icon: "花", State: "running", Health: "healthy", Order: 20},
-		{ID: "demo/gourmetkan", Name: "グルメ館", Category: "暮らし", Icon: "食", State: "running", Health: "none", Order: 30},
+		{ID: "demo/gourmetkan", Name: "グルメ館", Description: "ご飯屋さんを共有するアプリ。画面はローカル起動時のサンプルです。", URL: webURL(os.Getenv("DEMO_GOURMETKAN_URL")), Preview: "/previews/gourmetkan.png", Category: "暮らし", Icon: "食", State: "running", Health: "none", Order: 30},
 		{ID: "demo/aquarium", Name: "プロセス水族館", Category: "ツール", Icon: "泳", State: "running", Health: "healthy", Order: 40},
 		{ID: "demo/hedgedoc", Name: "HedgeDoc", Category: "ツール", Icon: "記", State: "exited", Health: "none", Order: 50},
 	}

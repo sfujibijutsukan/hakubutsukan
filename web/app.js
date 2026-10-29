@@ -1,4 +1,8 @@
 'use strict';
+try {
+  const theme = localStorage.getItem('hakubutsukan.theme');
+  if (['classic', 'louvre', 'japanese', 'cyberpunk'].includes(theme)) document.documentElement.dataset.theme = theme;
+} catch (_) {}
 const $ = (id) => document.getElementById(id);
 let catalog = null;
 let category = 'すべて';
@@ -54,6 +58,15 @@ function card(e, index) {
     }
   };
   top.append(icon, favorite);
+  const preview = /^\/previews\/[a-zA-Z0-9][a-zA-Z0-9_-]*\.(png|jpg|jpeg|webp)$/.test(e.preview || '') ? e.preview : '';
+  if (preview) {
+    const image = element('img', 'card-preview');
+    image.alt = `${e.name}の画面プレビュー（撮影時点）`;
+    image.loading = 'lazy'; image.decoding = 'async';
+    image.onload = () => top.classList.add('has-preview');
+    image.onerror = () => { image.remove(); top.classList.remove('has-preview'); };
+    image.src = preview; top.prepend(image);
+  }
   const body = element('div', 'card-body');
   body.append(element('h2', '', e.name));
   if (e.description) body.append(element('p', 'description', e.description));
