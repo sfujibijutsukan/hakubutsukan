@@ -350,7 +350,7 @@ func main() {
 func demoExhibits() []Exhibit {
 	return []Exhibit{
 		{ID: "demo/animekan", Name: "アニメ館", Category: "エンタメ", Icon: "映", State: "running", Health: "none", Order: 10},
-		{ID: "demo/hanafudakan", Name: "花札館", URL: "https://hanahudakan.example.test", Category: "ゲーム", Icon: "花", State: "running", Health: "healthy", Order: 20},
+		{ID: "demo/hanafudakan", Name: "花札館", URL: webURL(os.Getenv("DEMO_HANAFUDAKAN_URL")), Category: "ゲーム", Icon: "花", State: "running", Health: "healthy", Order: 20},
 		{ID: "demo/gourmetkan", Name: "グルメ館", Category: "暮らし", Icon: "食", State: "running", Health: "none", Order: 30},
 		{ID: "demo/aquarium", Name: "プロセス水族館", Category: "ツール", Icon: "泳", State: "running", Health: "healthy", Order: 40},
 		{ID: "demo/hedgedoc", Name: "HedgeDoc", Category: "ツール", Icon: "記", State: "exited", Health: "none", Order: 50},

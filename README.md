@@ -60,7 +60,7 @@ LAN内用のアプリで、ログインはありません。DNS名だけではLA
 
 ### 既存Caddyで公開
 
-1. `hakubutsukan.example.test`などのDNSを既存のサーバーへ向ける。
+1. `museum.example.test`などのDNSを既存のサーバーへ向ける。
 2. `.env`の`HAKUBUTSUKAN_DOMAIN`と`CADDY_NETWORK`を実環境に合わせる。既存Caddyが参加するDockerネットワーク名を指定する。
 3. 起動する。
 
@@ -82,7 +82,7 @@ services:
       hakubutsukan.enable: "true"
       hakubutsukan.name: "花札館"
       hakubutsukan.description: "季節をめくり、一枚の札から遊びがはじまる。"
-      hakubutsukan.url: "https://hanahudakan.example.test"
+      hakubutsukan.url: "https://hanafudakan.example.test"
       hakubutsukan.category: "ゲーム"
       hakubutsukan.icon: "花"
       hakubutsukan.order: "20"
