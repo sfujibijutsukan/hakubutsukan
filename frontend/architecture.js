@@ -1,7 +1,11 @@
 import * as THREE from 'three';
+import { buildLouvre, buildJapanese, buildCyberpunk, decorateThemedFrame } from './themed-architecture.js';
 
 // All ornament and textures are generated locally; the gallery needs no asset CDN.
-export function buildArchitecture(gallery, depth) {
+export function buildArchitecture(gallery, depth, theme = 'classic') {
+  if (theme === 'louvre') return buildLouvre(gallery, depth);
+  if (theme === 'japanese') return buildJapanese(gallery, depth);
+  if (theme === 'cyberpunk') return buildCyberpunk(gallery, depth);
   const stone = '#d8cdb6', walnut = '#35291f', gold = '#a78a4f';
   const length = depth + 10, centre = (10 - depth) / 2;
   const mat = (color, metalness = 0, roughness = .8) => new THREE.MeshStandardMaterial({ color, metalness, roughness });
@@ -132,7 +136,8 @@ export function buildArchitecture(gallery, depth) {
   return floor;
 }
 
-export function decorateFrame(group) {
+export function decorateFrame(group, theme = 'classic') {
+  if (theme !== 'classic') { decorateThemedFrame(group, theme); return; }
   function rail(w,h,d,color,x,y,z,metalness=0){
     const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),new THREE.MeshStandardMaterial({color,metalness,roughness:.4}));
     mesh.position.set(x,y,z);mesh.castShadow=true;group.add(mesh);

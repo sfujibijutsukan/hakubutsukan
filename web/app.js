@@ -1,4 +1,8 @@
 'use strict';
+try {
+  const theme = localStorage.getItem('hakubutsukan.theme');
+  if (['classic', 'louvre', 'japanese', 'cyberpunk'].includes(theme)) document.documentElement.dataset.theme = theme;
+} catch (_) {}
 const $ = (id) => document.getElementById(id);
 let catalog = null;
 let category = 'すべて';

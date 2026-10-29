@@ -1,12 +1,15 @@
 import * as THREE from 'three';
 import { buildArchitecture, decorateFrame } from './architecture.js';
+import { themes, themeStorageKey, validTheme, loadTheme } from './themes.js';
 
 const $ = id => document.getElementById(id);
 const stage = $('scene');
 const clamp = THREE.MathUtils.clamp;
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const keys = new Set();
-let renderer, scene, camera, gallery, raycaster;
+let renderer, scene, camera, gallery, raycaster, hemisphere, ambient;
+let theme;
+try { theme = loadTheme(localStorage); } catch { theme = 'classic'; }
 let items = [], artwork = [], labels = [], floor, depth = 26, current = -1;
 let yaw = 0, pitch = -.025, walking = null, dragging = null, lastTime = 0, drawCount = 0;
 let stale = false, active = true, lastCatalog = '', touchMove = '';
@@ -72,12 +75,12 @@ function disposeGallery() {
 function buildRoom() {
   disposeGallery(); gallery = new THREE.Group(); scene.add(gallery);
   depth = Math.max(24, Math.ceil(items.length / 2) * 6.8 + 9);
-  floor = buildArchitecture(gallery, depth);
+  floor = buildArchitecture(gallery, depth, theme);
   items.forEach((item, index) => {
     const left = index % 2 === 0, x = left ? -7.9 : 7.9, z = -2 - Math.floor(index / 2) * 6.8;
     const group = new THREE.Group(); group.position.set(x, 2.45, z); group.rotation.y = left ? Math.PI / 2 : -Math.PI / 2;
-    const frame = new THREE.Mesh(new THREE.BoxGeometry(3.45, 2.7, .13), material('#645e4b')); frame.castShadow = true; group.add(frame); decorateFrame(group);
-    const mat = new THREE.Mesh(new THREE.BoxGeometry(3.3, 2.55, .02), material('#efecdf')); mat.position.z = .08; group.add(mat);
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(3.45, 2.7, .13), material(themes[theme].frame)); frame.castShadow = true; group.add(frame); decorateFrame(group, theme);
+    const mat = new THREE.Mesh(new THREE.BoxGeometry(3.3, 2.55, .02), material(themes[theme].mount)); mat.position.z = .08; group.add(mat);
     const painting = new THREE.Mesh(new THREE.PlaneGeometry(2.91, 2.18), new THREE.MeshStandardMaterial({ map: artTexture(item, index), roughness: 1, side: THREE.FrontSide }));
     painting.position.z = .1; painting.userData.index = index; group.add(painting); artwork.push(painting);
     // Keep the illustration on missing/failed images and ignore loads from an old room.
@@ -97,7 +100,7 @@ function buildRoom() {
       }, undefined, () => {});
     }
     gallery.add(group);
-    const spot = new THREE.SpotLight('#fff2d4', 22, 12, .57, .85, 1.6); spot.position.set(left ? -4.8 : 4.8, 4.9, z + .5); spot.target = group; gallery.add(spot);
+    const spot = new THREE.SpotLight(themes[theme].spot, 22, 12, .57, .85, 1.6); spot.position.set(left ? -4.8 : 4.8, 4.9, z + .5); spot.target = group; gallery.add(spot);
     const label = document.createElement('button'); label.className = 'wall-label'; label.setAttribute('aria-label', `${item.name}の展示へ移動`);
     const number = document.createElement('span'); number.textContent = String(index + 1).padStart(2, '0'); label.append(number, document.createTextNode(item.name)); label.onclick = () => visit(index); $('labels').append(label); labels.push(label);
     item.anchor = new THREE.Vector3(left ? -7.6 : 7.6, .95, z);
@@ -126,7 +129,7 @@ function showExhibit(index) {
   [...$('map-room').querySelectorAll('button')].forEach((button, i) => button.classList.toggle('active', i === index));
 }
 function closeExhibit() { $('exhibit').hidden = true; }
-function setMap(open) { $('map').hidden = !open; $('map-toggle').setAttribute('aria-expanded', String(open)); }
+function setMap(open) { if (open) setThemes(false); $('map').hidden = !open; $('map-toggle').setAttribute('aria-expanded', String(open)); }
 function visit(index) {
   if (!items.length) return; index = (index + items.length) % items.length;
   const item = items[index]; walking = { position: item.approach.clone(), yaw: item.yaw, pitch: .08 };
@@ -197,18 +200,58 @@ function start() {
     renderer.toneMapping=THREE.ACESFilmicToneMapping; renderer.toneMappingExposure=1; stage.append(renderer.domElement);
     scene=new THREE.Scene(); scene.background=new THREE.Color('#213b32'); scene.fog=new THREE.Fog('#213b32',26,75);
     camera=new THREE.PerspectiveCamera(62,innerWidth/innerHeight,.1,90); raycaster=new THREE.Raycaster();
-    scene.add(new THREE.HemisphereLight('#f5ead3','#493b29',1.5)); scene.add(new THREE.AmbientLight('#f2ead9',.5));
+    hemisphere=new THREE.HemisphereLight();ambient=new THREE.AmbientLight();scene.add(hemisphere,ambient);applyThemeLighting();
     buildRoom(); resize(); renderer.setAnimationLoop(animate);
     renderer.domElement.addEventListener('webglcontextlost',event=>{event.preventDefault();$('message').textContent='描画が中断しました。再読み込みするか一覧を開いてください。';});
   } catch { $('message').textContent='この端末では館内を描画できません。右上の一覧を開いてください。'; return; }
   stage.addEventListener('pointerdown',event=>{if(event.button!==0)return; dragging={x:event.clientX,y:event.clientY,lastX:event.clientX,lastY:event.clientY,moved:false};stage.setPointerCapture(event.pointerId);stage.focus({preventScroll:true});});
   stage.addEventListener('pointermove',event=>{if(dragging){const dx=event.clientX-dragging.lastX,dy=event.clientY-dragging.lastY; if(Math.hypot(event.clientX-dragging.x,event.clientY-dragging.y)>5)dragging.moved=true; if(dragging.moved){$('room-title').hidden=true;walking=null;yaw-=dx*.004;pitch=clamp(pitch-dy*.003,-.55,.45);}dragging.lastX=event.clientX;dragging.lastY=event.clientY;}else if(event.pointerType==='mouse'){pointAt(event);stage.style.cursor=raycaster.intersectObjects(artwork).length?'pointer':'grab';}});
   stage.addEventListener('pointerup',event=>{if(dragging&&!dragging.moved)clickScene(event);dragging=null;});stage.addEventListener('pointercancel',()=>{dragging=null;});
-  addEventListener('keydown',event=>{if(['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName))return;if(event.code==='Escape'){setMap(false);closeExhibit();walking=null;return;}if(['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(event.code)){event.preventDefault();keys.add(event.code);}});
+  addEventListener('keydown',event=>{if(event.code==='Escape'){if(!$('themes').hidden){setThemes(false);$('theme-toggle').focus();return;}setMap(false);closeExhibit();walking=null;return;}if(['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName))return;if(['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(event.code)){event.preventDefault();keys.add(event.code);}});
   addEventListener('keyup',event=>keys.delete(event.code));addEventListener('blur',()=>{keys.clear();touchMove='';dragging=null;});
   document.addEventListener('visibilitychange',()=>{active=!document.hidden;keys.clear();touchMove='';lastTime=0;});addEventListener('resize',resize);
   $('next').onclick=()=>visit(current+1);$('previous').onclick=()=>visit(current<0?items.length-1:current-1);$('home').onclick=returnHome;$('exhibit-close').onclick=closeExhibit;$('map-toggle').onclick=()=>setMap($('map').hidden);$('map-close').onclick=()=>{setMap(false);$('map-toggle').focus();};
   for(const button of document.querySelectorAll('[data-move]')){button.addEventListener('pointerdown',event=>{event.preventDefault();touchMove=button.dataset.move;button.setPointerCapture(event.pointerId);});for(const name of ['pointerup','pointercancel','lostpointercapture'])button.addEventListener(name,()=>touchMove='');}
   refresh();setInterval(refresh,15000);
 }
+function setThemes(open) {
+  $('themes').hidden = !open;
+  $('theme-toggle').setAttribute('aria-expanded', String(open));
+  if (open) { setMap(false); keys.clear(); touchMove = ''; walking = null; dragging = null; }
+}
+function applyThemeLighting() {
+  const config = themes[theme];
+  scene.background.set(config.background); scene.fog.color.set(config.background);
+  hemisphere.color.set(config.sky); hemisphere.groundColor.set(config.ground); hemisphere.intensity = config.hemisphere;
+  ambient.color.set(config.ambient); ambient.intensity = .5; renderer.toneMappingExposure = config.exposure;
+}
+function applyThemeCopy() {
+  const config = themes[theme]; document.documentElement.dataset.theme = theme;
+  $('room-title').querySelector('.room-eyebrow').textContent = config.eyebrow;
+  $('room-title').querySelector('p').textContent = config.title;
+  $('room-title').querySelector('.room-caption').textContent = config.caption;
+  $('theme-toggle').setAttribute('aria-label', `空間を選ぶ（現在：${config.name}）`);
+  document.querySelectorAll('[name="museum-theme"]').forEach(input => { input.checked = input.value === theme; });
+}
+$('theme-toggle').onclick = () => setThemes($('themes').hidden);
+$('themes-close').onclick = () => { setThemes(false); $('theme-toggle').focus(); };
+document.addEventListener('keydown', event => {
+  if (event.code === 'Escape' && !$('themes').hidden) {
+    event.preventDefault(); event.stopPropagation(); setThemes(false); $('theme-toggle').focus();
+  }
+});
+$('theme-options').addEventListener('change', event => {
+  if (event.target.name !== 'museum-theme') return;
+  const next = validTheme(event.target.value); if (next === theme) return;
+  theme = next;
+  try { localStorage.setItem(themeStorageKey, theme); } catch { /* Keep the session usable when storage is unavailable. */ }
+  applyThemeCopy();
+  if (gallery) {
+    keys.clear(); touchMove = ''; walking = null; dragging = null;
+    applyThemeLighting(); buildRoom();
+    if (current >= 0 && !$('exhibit').hidden) showExhibit(current);
+  }
+  $('theme-feedback').textContent = `${themes[theme].name}に切り替えました`;
+});
+applyThemeCopy();
 start();
