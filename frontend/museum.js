@@ -2,11 +2,13 @@ import * as THREE from 'three';
 import { buildArchitecture, decorateFrame } from './architecture.js';
 import { themes, themeStorageKey, validTheme, loadTheme } from './themes.js';
 import { TatamiFootsteps } from './footsteps.js';
+import { createEntrance } from './entrance.js';
 
 const $ = id => document.getElementById(id);
 const stage = $('scene');
 const clamp = THREE.MathUtils.clamp;
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const entrance = createEntrance({ reduced, onEnter: () => { keys.clear(); touchMove = ''; lastTime = 0; } });
 const keys = new Set();
 const footsteps = new TatamiFootsteps();
 let footstepsMuted = false;
@@ -197,6 +199,7 @@ async function refresh() {
     if(current>=0 && !$('exhibit').hidden)showExhibit(current);
     $('message').textContent=stale?'展示情報の更新を待っています':items.length?'':'展示がありません';
   } catch { stale=true; $('message').textContent='展示情報に接続できません。再接続しています。'; if(current>=0&&!$('exhibit').hidden)showExhibit(current); }
+  finally { entrance.ready(); }
 }
 
 function start() {
@@ -209,11 +212,11 @@ function start() {
     hemisphere=new THREE.HemisphereLight();ambient=new THREE.AmbientLight();scene.add(hemisphere,ambient);applyThemeLighting();
     buildRoom(); resize(); renderer.setAnimationLoop(animate);
     renderer.domElement.addEventListener('webglcontextlost',event=>{event.preventDefault();footsteps.setEnabled(false);$('message').textContent='描画が中断しました。再読み込みするか一覧を開いてください。';});
-  } catch { $('message').textContent='この端末では館内を描画できません。右上の一覧を開いてください。'; return; }
+  } catch { $('message').textContent='この端末では館内を描画できません。右上の一覧を開いてください。'; entrance.ready(); return; }
   stage.addEventListener('pointerdown',event=>{if(event.button!==0)return; dragging={x:event.clientX,y:event.clientY,lastX:event.clientX,lastY:event.clientY,moved:false};stage.setPointerCapture(event.pointerId);stage.focus({preventScroll:true});});
   stage.addEventListener('pointermove',event=>{if(dragging){const dx=event.clientX-dragging.lastX,dy=event.clientY-dragging.lastY; if(Math.hypot(event.clientX-dragging.x,event.clientY-dragging.y)>5)dragging.moved=true; if(dragging.moved){$('room-title').hidden=true;walking=null;yaw-=dx*.004;pitch=clamp(pitch-dy*.003,-.55,.45);}dragging.lastX=event.clientX;dragging.lastY=event.clientY;}else if(event.pointerType==='mouse'){pointAt(event);stage.style.cursor=raycaster.intersectObjects(artwork).length?'pointer':'grab';}});
   stage.addEventListener('pointerup',event=>{if(dragging&&!dragging.moved)clickScene(event);dragging=null;});stage.addEventListener('pointercancel',()=>{dragging=null;});
-  addEventListener('keydown',event=>{if(event.code==='Escape'){if(!$('themes').hidden){setThemes(false);$('theme-toggle').focus();return;}setMap(false);closeExhibit();walking=null;return;}if(['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName))return;if(['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(event.code)){event.preventDefault();keys.add(event.code);}});
+  addEventListener('keydown',event=>{if(entrance.active)return;if(event.code==='Escape'){if(!$('themes').hidden){setThemes(false);$('theme-toggle').focus();return;}setMap(false);closeExhibit();walking=null;return;}if(['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName))return;if(['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(event.code)){event.preventDefault();keys.add(event.code);}});
   addEventListener('keyup',event=>keys.delete(event.code));addEventListener('blur',()=>{keys.clear();touchMove='';dragging=null;footsteps.setEnabled(false);});
   document.addEventListener('visibilitychange',()=>{active=!document.hidden;keys.clear();touchMove='';lastTime=0;updateFootsteps();});addEventListener('resize',resize);
   $('next').onclick=()=>visit(current+1);$('previous').onclick=()=>visit(current<0?items.length-1:current-1);$('home').onclick=returnHome;$('exhibit-close').onclick=closeExhibit;$('map-toggle').onclick=()=>setMap($('map').hidden);$('map-close').onclick=()=>{setMap(false);$('map-toggle').focus();};
@@ -277,4 +280,5 @@ document.addEventListener('keydown', event => { if (!event.repeat) footsteps.unl
 addEventListener('focus', updateFootsteps);
 addEventListener('pagehide', () => footsteps.setEnabled(false));
 applyThemeCopy();
-start();
+// Paint the identity before building the Three.js room on the main thread.
+requestAnimationFrame(() => requestAnimationFrame(start));

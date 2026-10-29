@@ -8,7 +8,22 @@
   <link rel="stylesheet" href="/museum.css">
   <script type="module" src="/museum.bundle.js"></script>
 </head>
-<body>
+<body class="is-entering">
+  <section id="entrance" role="dialog" aria-modal="true" aria-labelledby="entrance-logo" aria-describedby="entrance-caption">
+    <div class="entrance-door door-left" aria-hidden="true"></div><div class="entrance-door door-right" aria-hidden="true"></div>
+    <div class="entrance-border" aria-hidden="true"></div>
+    <div class="entrance-content">
+      <span class="entrance-eyebrow">A COLLECTION OF SMALL WORLDS</span>
+      <div class="entrance-emblem" aria-hidden="true"><span>博</span></div>
+      <h1 id="entrance-logo">sfujihakubutsukan</h1>
+      <p id="entrance-caption">小さな世界が、ここで出会う。</p>
+      <div class="entrance-rule" aria-hidden="true"><span></span></div>
+      <button id="entrance-enter">入館する <span aria-hidden="true">⟶</span></button>
+      <p class="entrance-guide">まもなく展示室へご案内します</p>
+    </div>
+    <div class="entrance-bottom"><span>PRIVATE COLLECTION / OPEN TO CURIOSITY</span><a href="/list.html">一覧から見る ↗</a></div>
+  </section>
+  <div id="museum-content" inert>
   <div id="scene" role="application" aria-label="博物館の展示室。WASDで移動、矢印キーで旋回、ドラッグで見回せます。" tabindex="0"></div>
   <div id="labels"></div>
   <header>
@@ -45,6 +60,7 @@
   </footer>
   <div class="touch-controls" aria-label="移動操作">
     <button data-move="forward" aria-label="前に進む">↑</button><div><button data-move="left" aria-label="左を向く">↶</button><button data-move="back" aria-label="後ろに進む">↓</button><button data-move="right" aria-label="右を向く">↷</button></div>
+  </div>
   </div>
   <noscript><p>JavaScriptを有効にしてください。<a href="/list.html">一覧を開く</a></p></noscript>
 </body>
