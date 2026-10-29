@@ -9,6 +9,7 @@ let renderer, scene, camera, gallery, raycaster;
 let items = [], artwork = [], labels = [], floor, depth = 26, current = -1;
 let yaw = 0, pitch = -.025, walking = null, dragging = null, lastTime = 0, drawCount = 0;
 let stale = false, active = true, lastCatalog = '', touchMove = '';
+let roomVersion = 0;
 const pointer = new THREE.Vector2(), projected = new THREE.Vector3();
 const eye = new THREE.Vector3(0, 1.65, 7);
 const palette = ['#a19cb8', '#ad7c5f', '#9a9e73', '#6d9595', '#8796ac'];
@@ -66,6 +67,7 @@ function artTexture(exhibit, index) {
 }
 
 function disposeGallery() {
+  roomVersion++;
   if (!gallery) return;
   gallery.traverse(object => { object.geometry?.dispose(); if (object.material) { for (const m of Array.isArray(object.material) ? object.material : [object.material]) { m.map?.dispose(); m.dispose(); } } });
   scene.remove(gallery); labels.forEach(label => label.remove()); labels = []; artwork = [];
@@ -121,6 +123,22 @@ function buildRoom() {
     const mat = new THREE.Mesh(new THREE.BoxGeometry(3.3, 2.55, .02), material('#efecdf')); mat.position.z = .08; group.add(mat);
     const painting = new THREE.Mesh(new THREE.PlaneGeometry(2.91, 2.18), new THREE.MeshStandardMaterial({ map: artTexture(item, index), roughness: 1, side: THREE.FrontSide }));
     painting.position.z = .1; painting.userData.index = index; group.add(painting); artwork.push(painting);
+    // Keep the illustration on missing/failed images and ignore loads from an old room.
+    if (/^\/previews\/[a-zA-Z0-9][a-zA-Z0-9_-]*\.(png|jpg|jpeg|webp)$/.test(item.preview || '')) {
+      const version = roomVersion;
+      new THREE.ImageLoader().load(item.preview, image => {
+        if (version !== roomVersion) return;
+        const texture = canvasTexture((c, w, h) => {
+          c.fillStyle = '#f5f3ed'; c.fillRect(0, 0, w, h);
+          const scale = Math.min(w / image.width, h / image.height);
+          const width = image.width * scale, height = image.height * scale;
+          c.drawImage(image, (w - width) / 2, (h - height) / 2, width, height);
+        });
+        painting.material.map.dispose(); painting.material.dispose();
+        // UI screenshots should retain their original colours under the gallery lights.
+        painting.material = new THREE.MeshBasicMaterial({ map: texture, toneMapped: false });
+      }, undefined, () => {});
+    }
     gallery.add(group);
     const spot = new THREE.SpotLight('#fff2d4', 52, 12, .57, .85, 1.6); spot.position.set(left ? -4.8 : 4.8, 4.9, z + .5); spot.target = group; gallery.add(spot);
     const label = document.createElement('button'); label.className = 'wall-label'; label.setAttribute('aria-label', `${item.name}の展示へ移動`);

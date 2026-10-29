@@ -94,6 +94,7 @@ services:
 | `hakubutsukan.name` | 表示名。省略時はComposeサービス名 |
 | `hakubutsukan.description` | 説明文 |
 | `hakubutsukan.url` | ブラウザからアクセスできるHTTP(S) URL |
+| `hakubutsukan.preview` | 任意の画面画像。例: `/previews/gourmetkan.png` |
 | `hakubutsukan.category` | 分類。省略時「その他」 |
 | `hakubutsukan.icon` | 文字または絵文字（画像URLではない） |
 | `hakubutsukan.order` | 小さい順。省略時0 |
@@ -104,6 +105,40 @@ URLを省略した場合、単純な`caddy`ホスト名ラベルがあればHTTP
 同じプロジェクト・サービスのレプリカは一枚にまとめ、停止・不健康な状態を優先表示します。複数のサービスを同じIDにまとめる場合は、表示用のラベルも揃えてください。お気に入りはIDに紐付き、ブラウザ・端末間の同期はありません。
 
 アプリとcollectorでそれぞれ15秒ごとに取得するため、変更反映には通常最大約30秒かかります。ブラウザも15秒ごとに取得します。`REFRESH_INTERVAL`でサーバー側の間隔を変更できます。
+
+### 展示に画面プレビューを付ける
+
+`hakubutsukan.preview`を設定すると、3D展示の額と一覧カードに撮影済みのアプリ画面を表示します。画像の比率を保ち、余白を付けて全体を収めます。未設定・読み込み失敗時は元のイラスト／アイコンを表示します。プレビューは撮影時点の静止画で、現在の状態は状態ラベルで確認してください。
+
+グルメ館（[gourmetkan](https://github.com/sfujibijutsukan/gourmetkan)）の店舗一覧をサンプルとして同梱しています。元アプリはiframe埋め込みを禁止しているため、画面画像を使用します。サービス本体は「開く」から新しいタブで利用できます。
+
+```yaml
+# gourmetkanの既存Composeサービスに追加（サービス名: app）
+services:
+  app:
+    labels:
+      hakubutsukan.enable: "true"
+      hakubutsukan.name: "グルメ館"
+      hakubutsukan.description: "ご飯屋さんを共有するアプリ"
+      hakubutsukan.url: "https://gourmetkan.example.test" # 実際のLAN用URLに置換
+      hakubutsukan.preview: "/previews/gourmetkan.png"
+      hakubutsukan.category: "暮らし"
+      hakubutsukan.icon: "食"
+      hakubutsukan.order: "30"
+```
+
+自分の画像は`web/previews/`に配置して再ビルドするか、hakubutsukanサービスに読み取り専用でマウントします（collectorへのマウントは不要）。`PREVIEW_DIR`指定時は同梱画像の代わりにそのディレクトリを配信します。
+
+```yaml
+services:
+  hakubutsukan:
+    environment:
+      PREVIEW_DIR: /previews
+    volumes:
+      - ./previews:/previews:ro
+```
+
+ファイル名は半角英数字から始まる半角英数字・`_`・`-`と、拡張子`png`・`jpg`・`jpeg`・`webp`（小文字）を使用します。ラベルは`/previews/ファイル名`形式のみ受け付け、外部画像URLやHTMLは配信しません。画像にログイン情報や私的なデータを含めないでください。画像を更新するときは新しいファイル名に変更し、ラベルも更新してください。
 
 ## Dockerがなくてもデモを見る
 
@@ -122,6 +157,8 @@ docker compose -f compose.demo.yaml up -d --build
 ```
 
 デモは常に明示され、実環境へ接続できない場合に自動でデモへ切り替わることはありません。実URLが分からない展示は「URL未設定」と表示します。
+
+グルメ館は同梱のプレビュー画像を表示します。実際のサービスも開く場合は`DEMO_GOURMETKAN_URL`を指定してください（Composeでは`.env`、`go run`では環境変数）。未設定の場合は画像だけを表示します。
 
 ## 開発・検証
 
