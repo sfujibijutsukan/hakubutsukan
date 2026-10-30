@@ -31,6 +31,7 @@ type Exhibit struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	URL         string `json:"url"`
+	PreviewURL  string `json:"previewUrl,omitempty"`
 	Category    string `json:"category"`
 	Icon        string `json:"icon"`
 	State       string `json:"state"`
@@ -39,12 +40,13 @@ type Exhibit struct {
 }
 
 type Catalog struct {
-	Exhibits  []Exhibit `json:"exhibits"`
-	UpdatedAt time.Time `json:"updatedAt"`
-	Stale     bool      `json:"stale"`
-	Message   string    `json:"message,omitempty"`
-	Demo      bool      `json:"demo"`
-	DockgeURL string    `json:"dockgeUrl,omitempty"`
+	Exhibits       []Exhibit `json:"exhibits"`
+	UpdatedAt      time.Time `json:"updatedAt"`
+	Stale          bool      `json:"stale"`
+	Message        string    `json:"message,omitempty"`
+	Demo           bool      `json:"demo"`
+	DockgeURL      string    `json:"dockgeUrl,omitempty"`
+	PreviewOrigins []string  `json:"previewOrigins"`
 }
 
 type container struct {
@@ -129,7 +131,7 @@ func exhibitsFrom(containers []container) []Exhibit {
 			health = "starting"
 		}
 		order, _ := strconv.Atoi(l["hakubutsukan.order"])
-		result = append(result, Exhibit{ID: id, Name: name, Description: l["hakubutsukan.description"], URL: exhibitURL(l), Category: category, Icon: icon, State: c.State, Health: health, Order: order})
+		result = append(result, Exhibit{ID: id, Name: name, Description: l["hakubutsukan.description"], URL: exhibitURL(l), PreviewURL: webURL(l["hakubutsukan.preview_url"]), Category: category, Icon: icon, State: c.State, Health: health, Order: order})
 	}
 	sort.Slice(result, func(i, j int) bool {
 		if result[i].Order != result[j].Order {
@@ -274,7 +276,7 @@ func routes(s *store, collector bool) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "no-referrer")
-		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; frame-src "+previewFrameSources(s.catalog.PreviewOrigins)+"; frame-ancestors 'none'; base-uri 'none'; form-action 'none'")
 		mux.ServeHTTP(w, r)
 	})
 }
@@ -296,7 +298,11 @@ func main() {
 	demo := os.Getenv("DEMO_MODE") == "true"
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	s := &store{catalog: Catalog{Exhibits: []Exhibit{}, DockgeURL: webURL(os.Getenv("DOCKGE_URL")), Demo: demo}}
+	origins, err := previewOrigins(os.Getenv("PREVIEW_ORIGINS"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	s := &store{catalog: Catalog{Exhibits: []Exhibit{}, DockgeURL: webURL(os.Getenv("DOCKGE_URL")), Demo: demo, PreviewOrigins: origins}}
 	var load func(context.Context) ([]Exhibit, error)
 	if demo {
 		load = func(context.Context) ([]Exhibit, error) { return demoExhibits(), nil }
@@ -315,6 +321,16 @@ func main() {
 				return nil, errors.New("collector data is stale")
 			}
 			return c.Exhibits, nil
+		}
+	}
+	if !collector {
+		source := load
+		load = func(ctx context.Context) ([]Exhibit, error) {
+			exhibits, err := source(ctx)
+			if err != nil {
+				return nil, err
+			}
+			return permittedPreviews(exhibits, origins), nil
 		}
 	}
 	s.update(ctx, load)
@@ -351,7 +367,7 @@ func demoExhibits() []Exhibit {
 	return []Exhibit{
 		{ID: "demo/animekan", Name: "アニメ館", Category: "エンタメ", Icon: "映", State: "running", Health: "none", Order: 10},
 		{ID: "demo/hanafudakan", Name: "花札館", URL: webURL(os.Getenv("DEMO_HANAFUDAKAN_URL")), Category: "ゲーム", Icon: "花", State: "running", Health: "healthy", Order: 20},
-		{ID: "demo/gourmetkan", Name: "グルメ館", Category: "暮らし", Icon: "食", State: "running", Health: "none", Order: 30},
+		{ID: "demo/gourmetkan", Name: "グルメ館", URL: webURL(os.Getenv("DEMO_GOURMETKAN_URL")), PreviewURL: webURL(os.Getenv("DEMO_GOURMETKAN_URL")), Category: "暮らし", Icon: "食", State: "running", Health: "none", Order: 30},
 		{ID: "demo/aquarium", Name: "プロセス水族館", Category: "ツール", Icon: "泳", State: "running", Health: "healthy", Order: 40},
 		{ID: "demo/hedgedoc", Name: "HedgeDoc", Category: "ツール", Icon: "記", State: "exited", Health: "none", Order: 50},
 	}

@@ -1,0 +1,259 @@
+diff --git a/AGENTS.md b/AGENTS.md
+index 595eb64..65e8f98 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -158,4 +158,8 @@ Then, run the sanity check and tests again to confirm that the problems have bee
+ Once you reach a reasonable milestone and both implementation and tests are complete, run gofmt (and goimports if needed) to format the code.
+ Next, perform static analysis using golangci-lint (or go vet) to maintain code quality.
+ 
+-After that, commit your changes and proceed to the next task.
+\ No newline at end of file
++After that, commit your changes and proceed to the next task.
++
++## Implemented toolchain and preview configuration
++
++The repository now contains the Go application. Use `go build ./...`, `go test ./...`, `go vet ./...`, and `gofmt` on changed Go files. `PREVIEW_MODE=true` enables a read-only local preview without OAuth credentials; `EMBED_ORIGIN` optionally permits a single exact HTTP(S) parent origin. Default production authentication and anti-framing behavior remain enabled.
+diff --git a/README.md b/README.md
+index fb300ae..d21e08a 100644
+--- a/README.md
++++ b/README.md
+@@ -29,3 +29,10 @@ If you run `docker compose down -v`, uploaded images will also be deleted.
+ - Uploaded images: `./static/uploads`
+ 
+ 2. Docker compose
++
++
++## ローカル展示用の起動
++
++`PREVIEW_MODE=true` ではOAuth設定なしで閲覧用に起動できます。認証ルートとGET/HEAD以外のリクエストは拒否し、ログインボタンを非表示にします。既存DBとは別の保存先で起動してください。
++
++`EMBED_ORIGIN=http://localhost:8090` のように単一のHTTP(S)オリジンを指定した場合だけ、その親ページからのiframe表示を許可します。未設定時は従来どおり埋め込みを拒否します。通常運用では実際に使用する博物館のオリジンを明示してください。
+diff --git a/cmd/app/config.go b/cmd/app/config.go
+index 58a112f..ef2288b 100644
+--- a/cmd/app/config.go
++++ b/cmd/app/config.go
+@@ -2,8 +2,10 @@ package main
+ 
+ import (
+ 	"errors"
++	"net/url"
+ 	"os"
+ 	"strconv"
++	"strings"
+ 	"time"
+ )
+ 
+@@ -15,6 +17,8 @@ type config struct {
+ 	GitHubClientSecret string
+ 	CookieSecure       bool
+ 	SessionTTL         time.Duration
++	EmbedOrigin        string
++	PreviewMode        bool
+ }
+ 
+ func loadConfig() (config, error) {
+@@ -25,10 +29,19 @@ func loadConfig() (config, error) {
+ 		CookieSecure: envBool("COOKIE_SECURE", false),
+ 		SessionTTL:   14 * 24 * time.Hour,
+ 	}
++	cfg.PreviewMode = envBool("PREVIEW_MODE", false)
++	cfg.EmbedOrigin = strings.TrimSpace(os.Getenv("EMBED_ORIGIN"))
++	if cfg.EmbedOrigin != "" {
++		u, err := url.Parse(cfg.EmbedOrigin)
++		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" || u.User != nil || (u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "" || strings.ContainsAny(u.Host, " ;*\t\r\n") {
++			return cfg, errors.New("EMBED_ORIGIN must be a single HTTP(S) origin")
++		}
++		cfg.EmbedOrigin = u.Scheme + "://" + u.Host
++	}
+ 	cfg.GitHubClientID = os.Getenv("GITHUB_CLIENT_ID")
+ 	cfg.GitHubClientSecret = os.Getenv("GITHUB_CLIENT_SECRET")
+ 
+-	if cfg.GitHubClientID == "" || cfg.GitHubClientSecret == "" {
++	if !cfg.PreviewMode && (cfg.GitHubClientID == "" || cfg.GitHubClientSecret == "") {
+ 		return cfg, errors.New("GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET are required")
+ 	}
+ 	return cfg, nil
+diff --git a/cmd/app/config_test.go b/cmd/app/config_test.go
+new file mode 100755
+index 0000000..3317c5a
+--- /dev/null
++++ b/cmd/app/config_test.go
+@@ -0,0 +1,25 @@
++package main
++
++import "testing"
++
++func TestPreviewConfig(t *testing.T) {
++	t.Setenv("GITHUB_CLIENT_ID", "")
++	t.Setenv("GITHUB_CLIENT_SECRET", "")
++	t.Setenv("PREVIEW_MODE", "false")
++	if _, err := loadConfig(); err == nil {
++		t.Fatal("production must require OAuth")
++	}
++	t.Setenv("PREVIEW_MODE", "true")
++	for _, origin := range []string{"http://localhost:8090", "https://museum.example.test/", ""} {
++		t.Setenv("EMBED_ORIGIN", origin)
++		if _, err := loadConfig(); err != nil {
++			t.Fatal(err)
++		}
++	}
++	for _, origin := range []string{"*", "http://user:pass@localhost:8090", "http://localhost:8090/path", "https://example.test; frame-ancestors *", "https://example.test?x=1"} {
++		t.Setenv("EMBED_ORIGIN", origin)
++		if _, err := loadConfig(); err == nil {
++			t.Errorf("accepted %q", origin)
++		}
++	}
++}
+diff --git a/cmd/app/main.go b/cmd/app/main.go
+index c99aef2..86dc4fa 100644
+--- a/cmd/app/main.go
++++ b/cmd/app/main.go
+@@ -52,6 +52,8 @@ func main() {
+ 	router := handlers.NewRouter(
+ 		handlers.Config{
+ 			BaseURL:      cfg.BaseURL,
++			EmbedOrigin:  cfg.EmbedOrigin,
++			PreviewMode:  cfg.PreviewMode,
+ 			CookieSecure: cfg.CookieSecure,
+ 			SessionTTL:   cfg.SessionTTL,
+ 		},
+diff --git a/internal/handlers/render.go b/internal/handlers/render.go
+index cf730ee..ec8c733 100644
+--- a/internal/handlers/render.go
++++ b/internal/handlers/render.go
+@@ -8,6 +8,7 @@ import (
+ )
+ 
+ type TemplateData struct {
++	PreviewMode    bool
+ 	Bases          []BaseOption
+ 	SelectedBaseID int
+ 	User           interface{}
+@@ -43,6 +44,7 @@ func (h *Handler) render(w http.ResponseWriter, name string, data TemplateData)
+ 		h.templates[name] = parsed
+ 		tmpl = parsed
+ 	}
++	data.PreviewMode = h.cfg.PreviewMode
+ 	var buf bytes.Buffer
+ 	if err := tmpl.ExecuteTemplate(&buf, "layout", data); err != nil {
+ 		http.Error(w, "render error", http.StatusInternalServerError)
+diff --git a/internal/handlers/router.go b/internal/handlers/router.go
+index 3f89f80..ac7a2aa 100644
+--- a/internal/handlers/router.go
++++ b/internal/handlers/router.go
+@@ -14,6 +14,8 @@ type Config struct {
+ 	BaseURL      string
+ 	CookieSecure bool
+ 	SessionTTL   time.Duration
++	EmbedOrigin  string
++	PreviewMode  bool
+ }
+ 
+ type Router struct {
+@@ -44,7 +46,7 @@ func NewRouter(cfg Config, authService *auth.Service, baseService *services.Base
+ 	r.mux.HandleFunc("/reviews/", handlers.ReviewRouter)
+ 	r.mux.HandleFunc("/random", handlers.RandomRestaurant)
+ 	r.mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static"))))
+-	return securityHeadersMiddleware(r.mux)
++	return securityHeadersMiddleware(r.mux, cfg.EmbedOrigin, cfg.PreviewMode)
+ }
+ 
+ type Handler struct {
+diff --git a/internal/handlers/security_headers.go b/internal/handlers/security_headers.go
+index 564affb..a0150e6 100644
+--- a/internal/handlers/security_headers.go
++++ b/internal/handlers/security_headers.go
+@@ -1,18 +1,30 @@
+ package handlers
+ 
+-import "net/http"
++import (
++	"net/http"
++	"strings"
++)
+ 
+-func securityHeadersMiddleware(next http.Handler) http.Handler {
++func securityHeadersMiddleware(next http.Handler, embedOrigin string, previewMode bool) http.Handler {
+ 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+ 		h := w.Header()
+ 		h.Set("X-Content-Type-Options", "nosniff")
++		ancestors := "'none'"
+ 		h.Set("X-Frame-Options", "DENY")
++		if embedOrigin != "" {
++			ancestors = embedOrigin
++			h.Del("X-Frame-Options")
++		}
+ 		h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
+ 		h.Set("Permissions-Policy", "geolocation=(), camera=(), microphone=()")
+-		h.Set("Content-Security-Policy", "default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; object-src 'none'")
++		h.Set("Content-Security-Policy", "default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors "+ancestors+"; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; object-src 'none'")
+ 		if r.TLS != nil {
+ 			h.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+ 		}
++		if previewMode && ((r.Method != http.MethodGet && r.Method != http.MethodHead) || strings.HasPrefix(r.URL.Path, "/auth/")) {
++			http.Error(w, "Read-only local preview", http.StatusForbidden)
++			return
++		}
+ 		next.ServeHTTP(w, r)
+ 	})
+ }
+diff --git a/internal/handlers/security_headers_test.go b/internal/handlers/security_headers_test.go
+new file mode 100755
+index 0000000..12eafb1
+--- /dev/null
++++ b/internal/handlers/security_headers_test.go
+@@ -0,0 +1,41 @@
++package handlers
++
++import (
++	"net/http"
++	"net/http/httptest"
++	"strings"
++	"testing"
++)
++
++func TestPreviewEmbeddingAndReadOnlyMode(t *testing.T) {
++	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
++	tests := []struct {
++		name, origin, method, path string
++		preview                    bool
++		want                       int
++	}{
++		{"default", "", "GET", "/", false, 200},
++		{"embedded preview", "http://localhost:8090", "GET", "/", true, 200},
++		{"preview blocks writes", "http://localhost:8090", "POST", "/restaurants", true, 403},
++		{"preview blocks login", "http://localhost:8090", "GET", "/auth/github/login", true, 403},
++		{"production permits routing", "", "POST", "/restaurants", false, 200},
++	}
++	for _, tt := range tests {
++		t.Run(tt.name, func(t *testing.T) {
++			w := httptest.NewRecorder()
++			securityHeadersMiddleware(next, tt.origin, tt.preview).ServeHTTP(w, httptest.NewRequest(tt.method, tt.path, nil))
++			if w.Code != tt.want {
++				t.Fatalf("status %d", w.Code)
++			}
++			if tt.origin == "" {
++				if w.Header().Get("X-Frame-Options") != "DENY" || !strings.Contains(w.Header().Get("Content-Security-Policy"), "frame-ancestors 'none'") {
++					t.Fatal("default anti-framing changed")
++				}
++			} else {
++				if w.Header().Get("X-Frame-Options") != "" || !strings.Contains(w.Header().Get("Content-Security-Policy"), "frame-ancestors "+tt.origin+";") {
++					t.Fatal("incorrect allowed ancestor")
++				}
++			}
++		})
++	}
++}
+diff --git a/templates/layout.html b/templates/layout.html
+index 057b725..23ccb92 100644
+--- a/templates/layout.html
++++ b/templates/layout.html
+@@ -30,7 +30,7 @@
+             <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+             <button class="btn auth-btn" type="submit">Logout</button>
+           </form>
+-        {{else}}
++        {{else if not .PreviewMode}}
+           <a class="btn auth-btn" href="/auth/github/login">GitHub Login</a>
+         {{end}}
+       </div>

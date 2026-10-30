@@ -15,6 +15,51 @@ LAN内のサービスを展示カードから開く、小さなセルフホス�
 
 WebGL 2対応のブラウザが必要です。3Dを描画できない端末でも `/list.html` から一覧を利用できます。動きを減らすOS設定では展示への自動移動を即時切り替えにします。
 
+## グルメ館を展示するローカルプレビュー
+
+グルメ館のソースを隣の `../gourmetkan` に配置し、`PREVIEW_MODE` と `EMBED_ORIGIN` に対応した版を使います。別の場所にある場合は `GOURMETKAN_SOURCE` を指定してください。
+
+未対応のグルメ館には、博物館ルートで次の差分を適用します。すでに対応済みのローカル版には適用不要です。
+
+```sh
+git -C ../gourmetkan apply ../hakubutsukan/integrations/gourmetkan-preview.patch
+```
+
+
+```sh
+docker compose -p hakubutsukan-preview -f compose.preview.yaml up -d --build
+```
+
+- 博物館: `http://localhost:8090/`
+- グルメ館の展示へ直接移動: `http://localhost:8090/?exhibit=demo%2Fgourmetkan`
+- グルメ館: `http://localhost:8091/`
+
+グルメ館の額には実際のページをiframeで表示します。プレビュー面をクリックすると同じタブでグルメ館へ移動します。ドラッグした場合は視点操作となり、遷移しません。右上の一覧や展示名からの移動も利用できます。
+
+両サービスはループバックだけで公開します。グルメ館は閲覧専用で、OAuthログイン・更新操作は無効です。専用の名前付きボリュームを使い、既存の `data/app.db` をマウントしません。ポートを変更する場合は `MUSEUM_PORT` / `GOURMETKAN_PORT` と `MUSEUM_ORIGIN` / `GOURMETKAN_ORIGIN` を対応させてください。
+
+```sh
+docker compose -p hakubutsukan-preview -f compose.preview.yaml down
+```
+
+## 各サービスのライブプレビュー
+
+表示先とは別に `hakubutsukan.preview_url` ラベルを付け、博物館の `PREVIEW_ORIGINS` に許可するオリジンを明示します。初期状態ではプレビューは無効です。
+
+```yaml
+labels:
+  hakubutsukan.enable: "true"
+  hakubutsukan.name: "グルメ館"
+  hakubutsukan.url: "https://gourmet.example.test"
+  hakubutsukan.preview_url: "https://gourmet.example.test"
+```
+
+```dotenv
+PREVIEW_ORIGINS=https://gourmet.example.test
+```
+
+表示先アプリ側でも博物館のオリジンを `frame-ancestors` で許可する必要があります。グルメ館では `EMBED_ORIGIN` で指定します。埋め込みを拒否するアプリは通常の絵のまま展示し、リンクから開いてください。iframeはフォーム送信や親画面への自動遷移を許可せず、プレビュー面のリンクだけが遷移を担当します。フレームでのページ表示はCSS 3Dを使うため、ブラウザのズーム率は100%を推奨します。
+
 ## MVPでできること
 
 - Dockerラベルで指定したサービスの自動検出（停止中も掲載）
@@ -94,6 +139,7 @@ services:
 | `hakubutsukan.name` | 表示名。省略時はComposeサービス名 |
 | `hakubutsukan.description` | 説明文 |
 | `hakubutsukan.url` | ブラウザからアクセスできるHTTP(S) URL |
+| `hakubutsukan.preview_url` | 額の中に表示するHTTP(S) URL。`PREVIEW_ORIGINS` で許可したオリジンのみ |
 | `hakubutsukan.category` | 分類。省略時「その他」 |
 | `hakubutsukan.icon` | 文字または絵文字（画像URLではない） |
 | `hakubutsukan.order` | 小さい順。省略時0 |

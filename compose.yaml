@@ -10,6 +10,7 @@ services:
     environment:
       COLLECTOR_URL: http://collector:8080
       DOCKGE_URL: ${DOCKGE_URL:-}
+      PREVIEW_ORIGINS: ${PREVIEW_ORIGINS:-}
       REFRESH_INTERVAL: ${REFRESH_INTERVAL:-15s}
     depends_on:
       collector:

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { CSS3DObject, CSS3DRenderer } from 'three/addons/renderers/CSS3DRenderer.js';
 
 const $ = id => document.getElementById(id);
 const stage = $('scene');
@@ -6,6 +7,8 @@ const clamp = THREE.MathUtils.clamp;
 const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const keys = new Set();
 let renderer, scene, camera, gallery, raycaster;
+let pageRenderer, pageScene, pageExhibits = [], previewOrigins = [], suppressPreviewClick = false;
+let initialExhibit = new URLSearchParams(location.search).get('exhibit');
 let items = [], artwork = [], labels = [], floor, depth = 26, current = -1;
 let yaw = 0, pitch = -.025, walking = null, dragging = null, lastTime = 0, drawCount = 0;
 let stale = false, active = true, lastCatalog = '', touchMove = '';
@@ -69,6 +72,22 @@ function disposeGallery() {
   if (!gallery) return;
   gallery.traverse(object => { object.geometry?.dispose(); if (object.material) { for (const m of Array.isArray(object.material) ? object.material : [object.material]) { m.map?.dispose(); m.dispose(); } } });
   scene.remove(gallery); labels.forEach(label => label.remove()); labels = []; artwork = [];
+  pageExhibits.forEach(object => { object.element.querySelector('iframe').src = 'about:blank'; pageScene.remove(object); });
+  pageExhibits = [];
+}
+
+function addPageExhibit(item, group) {
+  const preview = safeURL(item.previewUrl), destination = safeURL(item.url);
+  if (!preview || !destination || !previewOrigins.includes(new URL(preview).origin)) return;
+  const element = document.createElement('div'); element.className = 'web-exhibit';
+  const frame = document.createElement('iframe'); frame.title = `${item.name}のプレビュー`; frame.src = preview; frame.tabIndex = -1;
+  frame.setAttribute('aria-hidden', 'true'); frame.setAttribute('sandbox', 'allow-scripts allow-same-origin'); frame.referrerPolicy = 'no-referrer';
+  const link = document.createElement('a'); link.href = destination; link.setAttribute('aria-label', `${item.name}のページを開く`);
+  link.onclick = event => { event.preventDefault(); if (!suppressPreviewClick) location.assign(destination); suppressPreviewClick = false; };
+  element.append(frame, link);
+  const object = new CSS3DObject(element); object.position.copy(group.position);
+  object.rotation.copy(group.rotation); object.translateZ(.115); object.scale.setScalar(2.91 / 1200);
+  pageScene.add(object); pageExhibits.push(object);
 }
 function buildRoom() {
   disposeGallery(); gallery = new THREE.Group(); scene.add(gallery);
@@ -122,6 +141,7 @@ function buildRoom() {
     const painting = new THREE.Mesh(new THREE.PlaneGeometry(2.91, 2.18), new THREE.MeshStandardMaterial({ map: artTexture(item, index), roughness: 1, side: THREE.FrontSide }));
     painting.position.z = .1; painting.userData.index = index; group.add(painting); artwork.push(painting);
     gallery.add(group);
+    addPageExhibit(item, group);
     const spot = new THREE.SpotLight('#fff2d4', 52, 12, .57, .85, 1.6); spot.position.set(left ? -4.8 : 4.8, 4.9, z + .5); spot.target = group; gallery.add(spot);
     const label = document.createElement('button'); label.className = 'wall-label'; label.setAttribute('aria-label', `${item.name}の展示へ移動`);
     const number = document.createElement('span'); number.textContent = String(index + 1).padStart(2, '0'); label.append(number, document.createTextNode(item.name)); label.onclick = () => visit(index); $('labels').append(label); labels.push(label);
@@ -143,7 +163,8 @@ function buildMap() {
 }
 function showExhibit(index) {
   const e = items[index]; if (!e) return;
-  current = index; $('exhibit').hidden = false; $('exhibit-no').textContent = String(index + 1).padStart(2, '0'); $('exhibit-name').textContent = e.name;
+  const livePreview = safeURL(e.previewUrl);
+  current = index; $('exhibit').hidden = !!(livePreview && safeURL(e.url) && previewOrigins.includes(new URL(livePreview).origin)); $('exhibit-no').textContent = String(index + 1).padStart(2, '0'); $('exhibit-name').textContent = e.name;
   $('exhibit-description').textContent = e.description; $('exhibit-description').hidden = !e.description;
   $('exhibit-status').textContent = stale ? '状態未確認' : e.state !== 'running' ? '停止中' : e.health === 'healthy' ? '正常' : e.health === 'unhealthy' ? '要確認' : e.health === 'starting' ? '準備中' : '起動中';
   const url = safeURL(e.url); $('exhibit-open').hidden = !url; $('exhibit-unset').hidden = !!url; if (url) $('exhibit-open').href = url; else $('exhibit-open').removeAttribute('href');
@@ -164,7 +185,13 @@ function pointAt(event) { const rect=stage.getBoundingClientRect(); pointer.set(
 function clickScene(event) {
   pointAt(event);
   const hits = raycaster.intersectObjects(artwork);
-  if (hits.length) { visit(hits[0].object.userData.index); return; }
+  if (hits.length) {
+    const index = hits[0].object.userData.index;
+    const item = items[index], preview = safeURL(item.previewUrl), destination = safeURL(item.url);
+    if (preview && destination && previewOrigins.includes(new URL(preview).origin)) location.assign(destination);
+    else visit(index);
+    return;
+  }
   const hitsFloor = raycaster.intersectObject(floor);
   if (hitsFloor.length) {
     const point = hitsFloor[0].point; point.y = 1.65; point.x=clamp(point.x,-6.9,6.9); point.z=clamp(point.z,-depth+1.5,8);
@@ -179,7 +206,7 @@ function move(dx,dz) {
   const x=clamp(eye.x+dx,-7.1,7.1), z=clamp(eye.z+dz,-depth+1.5,8.5);
   if (!blocked(x,eye.z)) eye.x=x; if (!blocked(eye.x,z)) eye.z=z;
 }
-function resize() { if (!renderer) return; camera.aspect=innerWidth/innerHeight; camera.fov=innerWidth<700?72:62; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); }
+function resize() { if (!renderer) return; camera.aspect=innerWidth/innerHeight; camera.fov=innerWidth<700?72:62; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); pageRenderer?.setSize(innerWidth,innerHeight); }
 function animate(time) {
   const dt = Math.min((time-lastTime)/1000 || 0,.05); lastTime=time;
   if (!active) return;
@@ -199,16 +226,22 @@ function animate(time) {
     labels.forEach((label,i) => { const item=items[i]; projected.copy(item.anchor).project(camera); const visible=projected.z<1 && projected.z>-1 && Math.abs(projected.x)<1.1 && Math.abs(projected.y)<1.1 && eye.distanceTo(item.anchor)<18; label.hidden=!visible; if(visible) label.style.transform=`translate(${(projected.x*.5+.5)*innerWidth}px,${(-projected.y*.5+.5)*innerHeight}px) translate(-50%,-50%)`; });
   }
   renderer.render(scene,camera);
+  for (const object of pageExhibits) {
+    projected.copy(object.position).project(camera);
+    object.visible = projected.z > -1 && projected.z < 1 && Math.abs(projected.x) < 2 && Math.abs(projected.y) < 2 && eye.distanceTo(object.position) < 24;
+  }
+  pageRenderer.render(pageScene,camera);
 }
 
 async function refresh() {
   try {
     const response=await fetch('/api/catalog',{cache:'no-store',signal:AbortSignal.timeout(12000)}); if(!response.ok) throw new Error('catalog'); const catalog=await response.json();
-    stale=!!catalog.stale; $('demo').hidden=!catalog.demo;
+    stale=!!catalog.stale; $('demo').hidden=!catalog.demo; previewOrigins=catalog.previewOrigins || [];
     const signature=JSON.stringify(catalog.exhibits);
     if(signature!==lastCatalog) {
       const selectedID=items[current]?.id; items=catalog.exhibits; lastCatalog=signature; buildRoom();
       if(selectedID) {const index=items.findIndex(e=>e.id===selectedID); if(index>=0)showExhibit(index);else{current=-1;closeExhibit();}}
+      if (initialExhibit) { const index=items.findIndex(e=>e.id===initialExhibit); if(index>=0)visit(index); initialExhibit=null; }
     }
     if(current>=0 && !$('exhibit').hidden)showExhibit(current);
     $('message').textContent=stale?'展示情報の更新を待っています':items.length?'':'展示がありません';
@@ -222,13 +255,16 @@ function start() {
     renderer.toneMapping=THREE.ACESFilmicToneMapping; renderer.toneMappingExposure=1.2; stage.append(renderer.domElement);
     scene=new THREE.Scene(); scene.background=new THREE.Color('#e5e1d5'); scene.fog=new THREE.Fog('#e5e1d5',22,60);
     camera=new THREE.PerspectiveCamera(62,innerWidth/innerHeight,.1,90); raycaster=new THREE.Raycaster();
+    pageScene=new THREE.Scene(); pageRenderer=new CSS3DRenderer(); pageRenderer.domElement.className='web-scene'; stage.after(pageRenderer.domElement);
     scene.add(new THREE.HemisphereLight('#faf4dc','#b3a18b',2.4)); scene.add(new THREE.AmbientLight('#f2ead9',.7));
     buildRoom(); resize(); renderer.setAnimationLoop(animate);
     renderer.domElement.addEventListener('webglcontextlost',event=>{event.preventDefault();$('message').textContent='描画が中断しました。再読み込みするか一覧を開いてください。';});
   } catch { $('message').textContent='この端末では館内を描画できません。右上の一覧を開いてください。'; return; }
-  stage.addEventListener('pointerdown',event=>{if(event.button!==0)return; dragging={x:event.clientX,y:event.clientY,lastX:event.clientX,lastY:event.clientY,moved:false};stage.setPointerCapture(event.pointerId);stage.focus({preventScroll:true});});
-  stage.addEventListener('pointermove',event=>{if(dragging){const dx=event.clientX-dragging.lastX,dy=event.clientY-dragging.lastY; if(Math.hypot(event.clientX-dragging.x,event.clientY-dragging.y)>5)dragging.moved=true; if(dragging.moved){walking=null;yaw-=dx*.004;pitch=clamp(pitch-dy*.003,-.55,.45);}dragging.lastX=event.clientX;dragging.lastY=event.clientY;}else if(event.pointerType==='mouse'){pointAt(event);stage.style.cursor=raycaster.intersectObjects(artwork).length?'pointer':'grab';}});
-  stage.addEventListener('pointerup',event=>{if(dragging&&!dragging.moved)clickScene(event);dragging=null;});stage.addEventListener('pointercancel',()=>{dragging=null;});
+  for (const surface of [stage,pageRenderer.domElement]) {
+    surface.addEventListener('pointerdown',event=>{if(event.button!==0)return; suppressPreviewClick=false; dragging={x:event.clientX,y:event.clientY,lastX:event.clientX,lastY:event.clientY,moved:false};if(!event.target.closest('a')){surface.setPointerCapture(event.pointerId);stage.focus({preventScroll:true});}});
+    surface.addEventListener('pointermove',event=>{if(dragging){const dx=event.clientX-dragging.lastX,dy=event.clientY-dragging.lastY; if(Math.hypot(event.clientX-dragging.x,event.clientY-dragging.y)>5)dragging.moved=true; if(dragging.moved){suppressPreviewClick=true;walking=null;yaw-=dx*.004;pitch=clamp(pitch-dy*.003,-.55,.45);}dragging.lastX=event.clientX;dragging.lastY=event.clientY;}else if(event.pointerType==='mouse'){pointAt(event);stage.style.cursor=raycaster.intersectObjects(artwork).length?'pointer':'grab';}});
+    surface.addEventListener('pointerup',event=>{if(dragging&&!dragging.moved&&!event.target.closest('a'))clickScene(event);dragging=null;});surface.addEventListener('pointercancel',()=>{dragging=null;});
+  }
   addEventListener('keydown',event=>{if(['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName))return;if(event.code==='Escape'){setMap(false);closeExhibit();walking=null;return;}if(['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(event.code)){event.preventDefault();keys.add(event.code);}});
   addEventListener('keyup',event=>keys.delete(event.code));addEventListener('blur',()=>{keys.clear();touchMove='';dragging=null;});
   document.addEventListener('visibilitychange',()=>{active=!document.hidden;keys.clear();touchMove='';lastTime=0;});addEventListener('resize',resize);
