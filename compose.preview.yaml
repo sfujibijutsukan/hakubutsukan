@@ -1,0 +1,52 @@
+# docker compose -p hakubutsukan-preview -f compose.preview.yaml up -d --build
+name: hakubutsukan-preview
+services:
+  hakubutsukan:
+    build: .
+    image: hakubutsukan:preview
+    restart: unless-stopped
+    environment:
+      DEMO_MODE: "true"
+      DEMO_GOURMETKAN_URL: ${GOURMETKAN_ORIGIN:-http://localhost:8091}
+      PREVIEW_ORIGINS: ${GOURMETKAN_ORIGIN:-http://localhost:8091}
+    ports:
+      - "127.0.0.1:${MUSEUM_PORT:-8090}:8080"
+    depends_on:
+      gourmetkan:
+        condition: service_healthy
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: [CMD, /hakubutsukan, healthcheck]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  gourmetkan:
+    build:
+      context: ${GOURMETKAN_SOURCE:-../gourmetkan}
+    image: gourmetkan:museum-preview
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${GOURMETKAN_PORT:-8091}:8080"
+    environment:
+      PREVIEW_MODE: "true"
+      EMBED_ORIGIN: ${MUSEUM_ORIGIN:-http://localhost:8090}
+      BASE_URL: ${GOURMETKAN_ORIGIN:-http://localhost:8091}
+      DATABASE_PATH: /app/data/app.db
+      LISTEN_ADDR: ":8080"
+      COOKIE_SECURE: "false"
+    volumes:
+      - gourmetkan-preview-data:/app/data
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: [CMD, wget, -q, --spider, http://127.0.0.1:8080/]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  gourmetkan-preview-data:

@@ -8,7 +8,7 @@ RUN npm run build
 FROM golang:1.27-alpine AS build
 WORKDIR /src
 COPY go.mod ./
-COPY main.go ./
+COPY main.go preview.go ./
 COPY web ./web
 COPY --from=frontend /src/web/museum.bundle.js ./web/museum.bundle.js
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /hakubutsukan .
