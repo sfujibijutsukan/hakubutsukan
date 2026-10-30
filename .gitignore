@@ -5,3 +5,7 @@ coverage.out
 
 node_modules/
 /web/museum.bundle.js
+
+# setup-env.py keeps private backups before replacing .env.
+.env.backup.*
+__pycache__/

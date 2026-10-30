@@ -133,6 +133,44 @@ docker compose up -d --build
 
 LAN内用のアプリで、ログインはありません。DNS名だけではLAN限定になりません。Caddyを使う場合も既存のLAN向けリスナーやアクセス元制限を確認してください。
 
+### Dockgeの情報から.envを設定する
+
+Ubuntuなど、博物館とDockgeを動かす同じLinuxホストで実行します。必要なのはPython 3、Docker CLI、`ip`コマンド（iproute2）です。Dockerソケットを読み取れるユーザーで実行してください。Pythonの追加パッケージやDockgeのAPIキーは不要です。
+
+```sh
+# まず変更予定だけ表示（ファイルは変更しない）
+python3 scripts/setup-env.py
+
+# 確認した設定を保存
+python3 scripts/setup-env.py --write
+
+# Dockgeで博物館スタックを再デプロイするか、通常のComposeで反映
+docker compose up -d --build
+```
+
+稼働中のDockgeコンテナの公開ポートから`DOCKGE_URL`を作り、既定経路のインターフェースからLAN IPv4を、`/var/run/docker.sock`から`DOCKER_GID`を取得します。既存のLAN用`BIND_ADDRESS`・`PORT`・`DOCKGE_URL`は保持し、`DOCKER_GID`はソケットの実際の値で更新します。テンプレートの`127.0.0.1`はLAN IPに変更するため、このスクリプトは通常の`compose.yaml`をLAN公開するときに使用してください。
+
+IPやDockgeを自動で選べない場合や、明示的に設定を変える場合は指定できます。
+
+```sh
+python3 scripts/setup-env.py --lan-ip 192.168.1.10 --dockge-container dockge --write
+
+# リバースプロキシ経由や、Dockgeがlocalhost限定・hostネットワークの場合
+python3 scripts/setup-env.py --lan-ip 192.168.1.10 --dockge-url https://dockge.example.test --write
+```
+
+`--lan-ip`・`--dockge-url`・`--port`は既存値より優先します。`--dockge-container`を指定すると既存の`DOCKGE_URL`に優先してそのコンテナから再検出します。複数のDockgeや同順位の既定経路、LAN公開ポートのないコンテナは推測せず、設定を保存せずに終了します。
+
+保存時は元の`.env`を`.env.backup.<日時>`へ退避し、`.env`とバックアップの権限を`600`にします。変更がなければバックアップは増やしません。コメント、独自変数、`PREVIEW_ORIGINS`など他の設定を保ち、`.env`をシェルで実行することはありません。初期状態ではリポジトリ直下の`.env`を対象にし、別のDockgeスタックの実ファイルへ書く場合は`--output /path/to/stack/.env`を指定します。
+
+Dockgeのコンテナ環境変数やパスワードは読み取りません。サービスの再起動・ファイアウォールの変更・Caddy設定の変更は行いません。`PREVIEW_ORIGINS`と展示用ラベルは別途設定してください。`compose.preview.yaml`のlocalhost固定ポートはこのスクリプトでは変更しません。
+
+検証:
+
+```sh
+python3 -m unittest discover -s scripts -p 'test_*.py' -v
+```
+
 ### 既存Caddyで公開
 
 1. `museum.example.test`などのDNSを既存のサーバーへ向ける。
