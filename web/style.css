@@ -6,7 +6,7 @@
   --muted: #75796e;
   --line: #dcded2;
   --green: #305c48;
-  --serif: "Yu Mincho", "Hiragino Mincho ProN", Georgia, serif;
+  --serif: "Hiragino Mincho ProN", "Yu Mincho", "YuMincho", "Noto Serif CJK JP", Baskerville, serif;
   --sans: "Yu Gothic UI", "Hiragino Kaku Gothic ProN", system-ui, sans-serif;
 }
 
@@ -50,6 +50,11 @@ h1 span { font: 17px Georgia, serif; color: #8a937e; letter-spacing: 0; margin-l
 .card { background: #fcfbf7; border: 1px solid #dedfd3; border-radius: 5px; overflow: hidden; transition: transform .18s, border-color .18s; display: flex; flex-direction: column; min-height: 260px; }
 .card:hover { transform: translateY(-3px); border-color: #a2b195; }
 .card-top { height: 92px; background: var(--tint); display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; }
+.card-top.has-preview { position: relative; height: auto; aspect-ratio: 4 / 3; padding: 0; background: var(--paper); }
+.card-preview { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.has-preview .card-preview { position: static; width: 100%; height: 100%; opacity: 1; object-fit: contain; }
+.has-preview .card-icon { display: none; }
+.has-preview .favorite { position: absolute; top: 10px; right: 12px; padding: 5px; background: #fcfbf7ed; border-radius: 3px; }
 .tone-0 { --tint: #e8e5ed; --icon: #796584; }
 .tone-1 { --tint: #eee5dd; --icon: #9c6e59; }
 .tone-2 { --tint: #e9eadb; --icon: #81834e; }
@@ -117,3 +122,12 @@ h1 span { font: 17px Georgia, serif; color: #8a937e; letter-spacing: 0; margin-l
   * { transition: none !important; }
   .card:hover { transform: none; }
 }
+
+/* Classical typography shared with the gallery. */
+.brand{gap:16px}.brand-copy{display:flex;flex-direction:column;gap:7px}.brand-name{font:500 28px/1 var(--serif);letter-spacing:.4em;margin-right:-.4em}.brand-roman{font:10px/1 Baskerville,"Palatino Linotype",serif;letter-spacing:.25em;color:#866b3e}.seal{width:46px;height:53px;border-color:#9e824c;outline:1px solid #9e824c55;outline-offset:4px;font-size:32px;color:#7e6536}
+h1{font-size:36px;letter-spacing:.18em}.card h2{font-size:23px;letter-spacing:.12em}.description{font-family:var(--serif);font-size:13px}.filters,.admin,.open-link{font-family:var(--serif);letter-spacing:.08em}.card{border-radius:0}.card-top{position:relative}.grid{align-items:start}.card-preview{inset:0}
+@media(max-width:640px){.brand{gap:12px}.brand-name{font-size:23px}.brand-roman{font-size:8px}.seal{width:34px;height:42px;font-size:26px}h1{font-size:29px}}
+
+:root[data-theme=louvre]{--paper:#f4eddf;--ink:#4b3b25;--green:#85652e;--line:#d7c9ab}[data-theme=louvre] .card{background:#fff9ed;border-color:#d7c9ab}
+:root[data-theme=japanese]{--paper:#eae2cd;--ink:#3b3929;--green:#566044;--line:#c8bd9d}[data-theme=japanese] .card{background:#f4eddb;border-color:#c8bd9d}[data-theme=japanese] .card-top{background:#dad2b5}
+:root[data-theme=cyberpunk]{--paper:#090f20;--ink:#c8f3ff;--green:#43e2e8;--line:#31475d;--serif:"SFMono-Regular",Consolas,"Yu Gothic UI",monospace;--muted:#a1bdd1}[data-theme=cyberpunk] .card{background:#111d30;border-color:#2e5366}[data-theme=cyberpunk] .card-top{background:#1c2940}[data-theme=cyberpunk] .description,[data-theme=cyberpunk] .updated,[data-theme=cyberpunk] .favorite,[data-theme=cyberpunk] .status{color:#abc6d9}[data-theme=cyberpunk] .filter[aria-pressed=true]{color:#091b2a}[data-theme=cyberpunk] .filter{color:#b4d6e4}[data-theme=cyberpunk] .search{background:#142036;border-color:#365b6b}[data-theme=cyberpunk] .search input{color:#dcf6ff}[data-theme=cyberpunk] .brand-roman,[data-theme=cyberpunk] .seal{color:#58e7ed}[data-theme=cyberpunk] .seal{border-color:#58e7ed}[data-theme=cyberpunk] .notice.demo{background:#192742;color:#c6efff;border-color:#376272}[data-theme=cyberpunk] .favorite{background:#17243bd9}[data-theme=cyberpunk] .card-bottom{border-color:#2b4055}[data-theme=cyberpunk] .card h2{letter-spacing:.06em}

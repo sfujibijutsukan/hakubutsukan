@@ -6,6 +6,32 @@ LAN内のサービスを展示カードから開く、小さなセルフホス�
 
 トップページは3D展示室です。額装した展示が実際のサービス一覧に対応します。外部CDNや画像サービスへの接続は不要です。
 
+深緑の壁と明朝体の館名、石造りの柱・アーチ、格天井、寄木床、真鍮の装飾額、ステンドグラス、天球儀を組み合わせたクラシックな展示室です。建築・模様はThree.jsとCanvasで生成します。書体は端末内のヒラギノ明朝・游明朝・Noto Serif CJK JPを優先し、利用できない場合はserifへフォールバックします。書体のダウンロードは不要です。
+
+![クラシックな常設展示室](docs/screenshots/museum-room.png)
+
+### 空間テーマを選ぶ
+
+右上の「空間」から展示室を切り替えられます。展示一覧は共通で、壁・床・天井・額・照明・中央のオブジェ・画面の書体と配色が変わります。選択中の展示と視点は維持します。
+
+| テーマ | 空間の特徴 |
+|---|---|
+| クラシック | 深緑の壁、真鍮の装飾額、格天井、寄木床、天球儀 |
+| ルーブル風 | 宮殿をイメージした石柱と金彩、天井画、大理石の市松床、シャンデリア、ガラスのピラミッド |
+| 和 | 畳、障子、木組み、紙の灯籠、朱の鳥居、丸窓の山水と盆栽 |
+| サイバーパンク | 金属パネル、シアンとマゼンタのネオン、グリッド床、都市のシルエット、立体のワイヤーフレーム |
+
+ルーブル風は宮殿的な美術館から着想したオリジナルの空間です。実際の館内の再現ではありません。
+
+選択はこのブラウザの`localStorage`に保存され、再読み込み後も復元されます。一覧画面にも配色を引き継ぎます。未設定・無効な保存値はクラシックを使用し、保存できない環境でもそのセッション内で切替できます。キーボードではテーマのラジオボタンを矢印キーで選び、Escapeで選択パネルを閉じます。ネオンは静的に点灯し、点滅演出はありません。
+
+和テーマでは、歩く距離に合わせて畳を擦る「スッ、スッ」という足音が鳴ります。キーボード・タッチ・床クリックや展示への自動移動に対応します。その場での旋回、壁に当たって移動できない場合、動きを減らす設定での瞬間移動では鳴りません。音は最初のクリックやキー操作後にWeb Audioで生成し、外部の音声ファイルは不要です。「空間」の「畳の足音：入／切」で消音でき、設定はこのブラウザに保存されます。他テーマへの切替や画面を離れた場合は停止します。
+
+| ルーブル風 | 和 | サイバーパンク |
+|---|---|---|
+| ![ルーブル風](docs/screenshots/museum-louvre.png) | ![和](docs/screenshots/museum-japanese.png) | ![サイバーパンク](docs/screenshots/museum-cyberpunk.png) |
+
+
 - PC: WASDで歩く、左右の矢印で旋回、ドラッグで見回す
 - スマートフォン: 画面の矢印を長押しして移動・旋回、ドラッグで見回す
 - 展示をクリック、または館内図や下部の矢印で展示の正面へ移動
@@ -140,6 +166,7 @@ services:
 | `hakubutsukan.description` | 説明文 |
 | `hakubutsukan.url` | ブラウザからアクセスできるHTTP(S) URL |
 | `hakubutsukan.preview_url` | 額の中に表示するHTTP(S) URL。`PREVIEW_ORIGINS` で許可したオリジンのみ |
+| `hakubutsukan.preview` | 任意の画面画像。例: `/previews/gourmetkan.png` |
 | `hakubutsukan.category` | 分類。省略時「その他」 |
 | `hakubutsukan.icon` | 文字または絵文字（画像URLではない） |
 | `hakubutsukan.order` | 小さい順。省略時0 |
@@ -150,6 +177,40 @@ URLを省略した場合、単純な`caddy`ホスト名ラベルがあればHTTP
 同じプロジェクト・サービスのレプリカは一枚にまとめ、停止・不健康な状態を優先表示します。複数のサービスを同じIDにまとめる場合は、表示用のラベルも揃えてください。お気に入りはIDに紐付き、ブラウザ・端末間の同期はありません。
 
 アプリとcollectorでそれぞれ15秒ごとに取得するため、変更反映には通常最大約30秒かかります。ブラウザも15秒ごとに取得します。`REFRESH_INTERVAL`でサーバー側の間隔を変更できます。
+
+### 展示に画面プレビューを付ける
+
+`hakubutsukan.preview`を設定すると、3D展示の額と一覧カードに撮影済みのアプリ画面を表示します。画像の比率を保ち、余白を付けて全体を収めます。未設定・読み込み失敗時は元のイラスト／アイコンを表示します。プレビューは撮影時点の静止画で、現在の状態は状態ラベルで確認してください。
+
+グルメ館（[gourmetkan](https://github.com/sfujibijutsukan/gourmetkan)）の店舗一覧をサンプルとして同梱しています。元アプリはiframe埋め込みを禁止しているため、画面画像を使用します。サービス本体は「開く」から新しいタブで利用できます。
+
+```yaml
+# gourmetkanの既存Composeサービスに追加（サービス名: app）
+services:
+  app:
+    labels:
+      hakubutsukan.enable: "true"
+      hakubutsukan.name: "グルメ館"
+      hakubutsukan.description: "ご飯屋さんを共有するアプリ"
+      hakubutsukan.url: "https://gourmetkan.example.test" # 実際のLAN用URLに置換
+      hakubutsukan.preview: "/previews/gourmetkan.png"
+      hakubutsukan.category: "暮らし"
+      hakubutsukan.icon: "食"
+      hakubutsukan.order: "30"
+```
+
+自分の画像は`web/previews/`に配置して再ビルドするか、hakubutsukanサービスに読み取り専用でマウントします（collectorへのマウントは不要）。`PREVIEW_DIR`指定時は同梱画像の代わりにそのディレクトリを配信します。
+
+```yaml
+services:
+  hakubutsukan:
+    environment:
+      PREVIEW_DIR: /previews
+    volumes:
+      - ./previews:/previews:ro
+```
+
+ファイル名は半角英数字から始まる半角英数字・`_`・`-`と、拡張子`png`・`jpg`・`jpeg`・`webp`（小文字）を使用します。ラベルは`/previews/ファイル名`形式のみ受け付け、外部画像URLやHTMLは配信しません。画像にログイン情報や私的なデータを含めないでください。画像を更新するときは新しいファイル名に変更し、ラベルも更新してください。
 
 ## Dockerがなくてもデモを見る
 
@@ -169,6 +230,8 @@ docker compose -f compose.demo.yaml up -d --build
 
 デモは常に明示され、実環境へ接続できない場合に自動でデモへ切り替わることはありません。実URLが分からない展示は「URL未設定」と表示します。
 
+グルメ館は同梱のプレビュー画像を表示します。実際のサービスも開く場合は`DEMO_GOURMETKAN_URL`を指定してください（Composeでは`.env`、`go run`では環境変数）。未設定の場合は画像だけを表示します。
+
 ## 開発・検証
 
 Go 1.22以上（DockerビルドはGo 1.27）を使用します。外部Goライブラリはありません。ローカル開発ではNode.js 18以上も使用し、`npm ci && npm run build` でフロントエンドを作成してからGoを起動してください。Composeは両方を自動でビルドします。
@@ -176,6 +239,7 @@ Go 1.22以上（DockerビルドはGo 1.27）を使用します。外部Goライ�
 ```sh
 npm ci
 npm run build
+npm test
 go test -race ./...
 go vet ./...
 go build ./...
